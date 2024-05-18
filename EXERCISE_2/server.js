@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 const app = express();
 const PORT = 3000;
 const secretKey = 'yourSecretKey'; // Replace with your secret key
@@ -9,25 +10,51 @@ const secretKey = 'yourSecretKey'; // Replace with your secret key
 app.use(bodyParser.json());
 
 // Dummy user data for demonstration
-const users = [
-  { id: 1, username: 'user1', password: 'password1' },
-  { id: 2, username: 'user2', password: 'password2' }
-];
+const users = [];
+
+// User registration route
+app.post('/register', async (req, res) => {
+  const { username, password } = req.body;
+  const userExists = users.find(u => u.username === username);
+  
+  if (userExists) {
+    return res.status(400).json({ message: 'Username already exists' });
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = { id: users.length + 1, username, password: hashedPassword };
+    users.push(newUser);
+    console.log('User registered:', newUser); // Debug statement
+    res.status(201).json({ message: 'User registered successfully' });
+  } catch (error) {
+    console.error(error); // Debug statement
+    res.status(500).json({ message: 'Error registering user' });
+  }
+});
 
 // Login route
-app.post('/login', (req, res) => {
-  // Mocked authentication logic
+app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  const user = users.find(u => u.username === username && u.password === password);
-
+  const user = users.find(u => u.username === username);
+  
   if (!user) {
     return res.status(401).json({ message: 'Invalid credentials' });
   }
 
-  // Generate JWT token
-  const token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '1h' });
+  try {
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
 
-  res.json({ token });
+    // Generate JWT token
+    const token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '1h' });
+    res.json({ token });
+  } catch (error) {
+    console.error(error); // Debug statement
+    res.status(500).json({ message: 'Error logging in' });
+  }
 });
 
 // Dummy protected route
