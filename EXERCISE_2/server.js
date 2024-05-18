@@ -14,21 +14,19 @@ const users = [];
 
 // User registration route
 app.post('/register', async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, role } = req.body;
   const userExists = users.find(u => u.username === username);
-  
+
   if (userExists) {
     return res.status(400).json({ message: 'Username already exists' });
   }
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = { id: users.length + 1, username, password: hashedPassword };
+    const newUser = { id: users.length + 1, username, password: hashedPassword, role };
     users.push(newUser);
-    console.log('User registered:', newUser); // Debug statement
     res.status(201).json({ message: 'User registered successfully' });
   } catch (error) {
-    console.error(error); // Debug statement
     res.status(500).json({ message: 'Error registering user' });
   }
 });
@@ -37,7 +35,7 @@ app.post('/register', async (req, res) => {
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   const user = users.find(u => u.username === username);
-  
+
   if (!user) {
     return res.status(401).json({ message: 'Invalid credentials' });
   }
@@ -49,17 +47,11 @@ app.post('/login', async (req, res) => {
     }
 
     // Generate JWT token
-    const token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '1h' });
+    const token = jwt.sign({ userId: user.id, role: user.role }, secretKey, { expiresIn: '1h' });
     res.json({ token });
   } catch (error) {
-    console.error(error); // Debug statement
     res.status(500).json({ message: 'Error logging in' });
   }
-});
-
-// Dummy protected route
-app.get('/protected', authenticateToken, (req, res) => {
-  res.json({ message: 'Protected route accessed successfully' });
 });
 
 // Middleware to authenticate JWT token
@@ -79,6 +71,24 @@ function authenticateToken(req, res, next) {
     next();
   });
 }
+
+// Middleware to check if user has admin role
+function isAdmin(req, res, next) {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  next();
+}
+
+// Admin protected route
+app.get('/admin', authenticateToken, isAdmin, (req, res) => {
+  res.json({ message: 'Admin route accessed successfully' });
+});
+
+// User protected route
+app.get('/user', authenticateToken, (req, res) => {
+  res.json({ message: 'User route accessed successfully' });
+});
 
 // Start the server
 app.listen(PORT, () => {
